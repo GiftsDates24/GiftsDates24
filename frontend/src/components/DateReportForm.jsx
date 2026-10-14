@@ -24,7 +24,7 @@ export const DateStartedNote = ({ id }) => {
   );
 };
 
-export default function DateReportForm({ id, onSubmit }) {
+export default function DateReportForm({ id, onSubmit, reply = false }) {
   const { lang } = useApp();
   const tr = (k) => t(k, lang);
   const [reasons, setReasons] = useState([]);
@@ -52,18 +52,18 @@ export default function DateReportForm({ id, onSubmit }) {
   const submit = async () => {
     if (details.trim().length < 10) { toast.error(tr("id_report_min")); return; }
     setBusy(true);
-    try { await onSubmit({ reasons, details, evidence, photos }); toast.success(tr("id_report_submitted")); }
-    catch (e) { toast.error(e.response?.data?.detail === "ALREADY_REPORTED" ? tr("rp_already") : e.response?.data?.detail || tr("failed")); }
+    try { await onSubmit(reply ? { details, photos } : { reasons, details, evidence, photos }); toast.success(tr(reply ? "rr_sent" : "id_report_submitted")); }
+    catch (e) { const d = e.response?.data?.detail; toast.error(d === "ALREADY_REPORTED" ? tr("rp_already") : d === "ALREADY_REPLIED" ? tr("rr_already") : d || tr("failed")); }
     finally { setBusy(false); }
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 space-y-2" data-testid={`report-form-${id}`}>
-      <div className="text-xs font-semibold text-rose-200 flex items-center gap-1"><ShieldAlert size={13} />{tr("id_report_title")}</div>
-      <div className="flex flex-wrap gap-1.5">{REASONS.map(([k, v]) => (
+    <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 space-y-2" data-testid={`${reply ? "reply" : "report"}-form-${id}`}>
+      <div className="text-xs font-semibold text-rose-200 flex items-center gap-1"><ShieldAlert size={13} />{tr(reply ? "rr_title" : "id_report_title")}</div>
+      {!reply && <div className="flex flex-wrap gap-1.5">{REASONS.map(([k, v]) => (
         <button key={k} type="button" onClick={() => setReasons(s => s.includes(v) ? s.filter(x => x !== v) : [...s, v])} data-testid={`report-reason-${k}-${id}`}
-          className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${reasons.includes(v) ? "bg-rose-500/20 border-rose-500/50 text-rose-200" : "bg-white/5 border-white/10 text-slate-400"}`}>{tr(k)}</button>))}</div>
-      <textarea data-testid={`report-details-${id}`} value={details} onChange={e => setDetails(e.target.value)} placeholder={tr("id_report_details_ph")} className="w-full bg-white/5 border border-white/10 rounded-md p-2 text-sm text-slate-200 min-h-[70px]" />
+          className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${reasons.includes(v) ? "bg-rose-500/20 border-rose-500/50 text-rose-200" : "bg-white/5 border-white/10 text-slate-400"}`}>{tr(k)}</button>))}</div>}
+      <textarea data-testid={`report-details-${id}`} value={details} onChange={e => setDetails(e.target.value)} placeholder={tr(reply ? "rr_details_ph" : "id_report_details_ph")} className="w-full bg-white/5 border border-white/10 rounded-md p-2 text-sm text-slate-200 min-h-[70px]" />
       <div className="space-y-1.5" data-testid={`report-evidence-block-${id}`}>
         <div className="text-[11px] text-slate-300">{tr("rp_evidence")}</div>
         <div className="flex flex-wrap gap-2">
@@ -82,10 +82,25 @@ export default function DateReportForm({ id, onSubmit }) {
           )}
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={addPhotos} data-testid={`report-photo-input-${id}`} />
-        <Input data-testid={`report-evidence-${id}`} value={evidence} onChange={e => setEvidence(e.target.value)} placeholder={tr("id_report_evidence_ph")} className="bg-white/5 border-white/10 h-9" />
+        {!reply && <Input data-testid={`report-evidence-${id}`} value={evidence} onChange={e => setEvidence(e.target.value)} placeholder={tr("id_report_evidence_ph")} className="bg-white/5 border-white/10 h-9" />}
       </div>
-      <div className="text-[11px] text-slate-400" data-testid={`report-note-${id}`}>{tr("rp_note")}</div>
-      <Button data-testid={`report-submit-${id}`} disabled={busy || uploading} onClick={submit} className="rose-btn text-white border-0 h-9">{tr("id_submit_report")}</Button>
+      <div className="text-[11px] text-slate-400" data-testid={`report-note-${id}`}>{tr(reply ? "rr_note" : "rp_note")}</div>
+      <Button data-testid={`${reply ? "reply" : "report"}-submit-${id}`} disabled={busy || uploading} onClick={submit} className="rose-btn text-white border-0 h-9">{tr(reply ? "rr_submit" : "id_submit_report")}</Button>
     </div>
   );
 }
+
+export const ReportReplyBlock = ({ id, info, onSubmit }) => {
+  const { lang } = useApp();
+  const [open, setOpen] = useState(false);
+  if (!info || info.by_me) return null;
+  return (
+    <div className="w-full rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 space-y-2" data-testid={`reported-block-${id}`}>
+      <div className="text-xs font-semibold text-rose-200 flex items-center gap-1"><ShieldAlert size={13} />{t("rr_you_were_reported", lang)}</div>
+      <div className="text-[11px] text-slate-300">{(info.reasons || []).join(", ")}{info.details ? ` — "${info.details}"` : ""}</div>
+      {info.replied ? <div className="text-[11px] text-emerald-300" data-testid={`reply-sent-${id}`}>{t("rr_sent", lang)}</div>
+        : info.status === "open" && (open ? <DateReportForm id={id} reply onSubmit={async (p) => { await onSubmit(p); setOpen(false); }} />
+          : <Button size="sm" onClick={() => setOpen(true)} data-testid={`reply-open-${id}`} className="rose-btn text-white border-0 h-8">{t("rr_open", lang)}</Button>)}
+    </div>
+  );
+};

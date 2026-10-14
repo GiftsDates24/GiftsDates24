@@ -2993,6 +2993,73 @@ async def _report_photos(user, photos):
     owned = [f["storage_path"] async for f in db.files.find({"storage_path": {"$in": photos}, "user_id": user["id"]}, {"storage_path": 1})]
     if owned: await db.files.update_many({"storage_path": {"$in": owned}}, {"$set": {"private": True}})
     return owned
+class ReportReplyReq(BaseModel):
+    details: str
+    photos: list[str] = []
+
+def _report_view(r, viewer_id):
+    """What a party may see about a report: the reported side sees reasons/details (never the photos)."""
+    if not r: return None
+    reply = r.get("reply")
+    return {"by_me": r.get("reporter_id") == viewer_id, "reasons": r.get("reasons") or [], "details": r.get("details"),
+            "status": r.get("status") or "open", "replied": bool(reply), "reply_at": (reply or {}).get("at")}
+
+async def _save_reply(coll, did, rep_doc, parties, user, req, label):
+    if not rep_doc: raise HTTPException(404, "No report")
+    if user["id"] not in parties or rep_doc.get("reporter_id") == user["id"]: raise HTTPException(403, "Only the reported person can reply")
+    if rep_doc.get("reply"): raise HTTPException(409, "ALREADY_REPLIED")
+    if (rep_doc.get("status") or "open") != "open": raise HTTPException(400, "REPORT_CLOSED")
+    if len((req.details or "").strip()) < 10: raise HTTPException(400, "Please describe your side (min 10 chars)")
+    reply = {"by": user["id"], "details": req.details.strip(), "photos": await _report_photos(user, req.photos), "at": _iso()}
+    await coll.update_one({"id": did}, {"$set": {"report.reply": reply}})
+    await notify(rep_doc["reporter_id"], "date_request", "The other person replied to your report", "Support received their side of the story and will review both.", {"date_id": did}, link=DATES_LINK, cta="View Date")
+    for aid in await _admin_ids():
+        await notify(aid, "date_request", "Report reply received", f"{user['name']} replied to the report on {label} ({did}).", {"date_id": did}, email=True, link=f"{PUBLIC_APP_URL}/admin", cta="View Case")
+    return {"ok": True, "replied": True}
+
+@api.post("/dates/report/{bid}/reply")
+async def booking_report_reply(bid: str, req: ReportReplyReq, user=Depends(get_current_user)):
+    b = await db.date_bookings.find_one({"id": bid}, {"_id": 0})
+    if not b: raise HTTPException(404, "Not found")
+    return await _save_reply(db.date_bookings, bid, b.get("report"), (b["from_id"], b["to_id"]), user, req, "a booked date")
+
+@api.post("/invites/{did}/report/reply")
+async def invite_report_reply(did: str, req: ReportReplyReq, user=Depends(get_current_user)):
+    d = await db.dates.find_one({"id": did}, {"_id": 0})
+    if not d: raise HTTPException(404, "Not found")
+    return await _save_reply(db.dates, did, d.get("report"), (d["inviter_id"], d["recipient_id"]), user, req, "a date")
+
+class SosReq(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    message: Optional[str] = ""
+
+@api.post("/sos/{kind}/{did}")
+async def sos_alert(kind: str, did: str, req: SosReq, user=Depends(get_current_user)):
+    """Emergency: alert support immediately with the member's position (if available)."""
+    _, d, parties, start, _ = await _live_target(kind, did, user["id"])
+    if req.lat is not None and not (-90 <= req.lat <= 90 and -180 <= (req.lng or 0) <= 180): raise HTTPException(400, "Invalid coordinates")
+    other = parties[1] if parties[0] == user["id"] else parties[0]
+    o = await db.users.find_one({"id": other}, {"_id": 0, "name": 1})
+    alert = {"id": str(uuid.uuid4()), "kind": kind, "date_id": did, "user_id": user["id"], "user_name": user.get("name"),
+             "user_phone": user.get("phone"), "user_email": user.get("email"), "other_id": other, "other_name": (o or {}).get("name"),
+             "lat": req.lat, "lng": req.lng, "message": (req.message or "").strip()[:500], "status": "open", "created_at": _iso()}
+    await db.sos_alerts.insert_one(dict(alert))
+    where = f" Location: https://www.google.com/maps/search/?api=1&query={req.lat},{req.lng}" if req.lat is not None else " (no location available)"
+    for aid in await _admin_ids():
+        await notify(aid, "sos", "SOS — member needs help", f"{user.get('name')} pressed SOS during a date with {alert['other_name']}.{where}", {"sos_id": alert["id"]}, email=True, link=f"{PUBLIC_APP_URL}/admin", cta="Open SOS")
+    return {"ok": True, "id": alert["id"]}
+
+@api.get("/admin/sos")
+async def admin_sos(admin=Depends(get_admin)):
+    return await db.sos_alerts.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+@api.post("/admin/sos/{sid}/resolve")
+async def admin_sos_resolve(sid: str, admin=Depends(get_admin)):
+    r = await db.sos_alerts.update_one({"id": sid, "status": "open"}, {"$set": {"status": "resolved", "resolved_at": _iso(), "resolved_by": admin["id"]}})
+    if not r.matched_count: raise HTTPException(404, "No open alert")
+    return {"ok": True}
+
 def _aware(dt): return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 def _report_open(b): return bool(b.get("report")) and (b["report"].get("status") or "open") == "open"
 BOOKING_REPORT_HOURS = 24
@@ -4499,6 +4566,7 @@ def _serialize(d, viewer_id, other_mini):
             "proposed_start": d.get("proposed_start"), "proposed_end": d.get("proposed_end"),
             "coins": d.get("coins"), "total_hold": d.get("total_hold"), "gift": d.get("gift"),
             "location": loc, "transportation": trans, "report": bool(d.get("report")),
+            "report_info": _report_view(d.get("report"), viewer_id),
             "verification": (d.get("verification") or {}).get("status"), "windows": windows,
             "server_now": _iso(), "created_at": d.get("created_at")}
 

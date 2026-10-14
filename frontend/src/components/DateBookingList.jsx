@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { CalendarHeart, Camera, Clock, Check, X, Car, Info, Coins, Flag } from "lucide-react";
-import DateReportForm, { DateStartedNote } from "./DateReportForm";
+import DateReportForm, { DateStartedNote, ReportReplyBlock } from "./DateReportForm";
 import { MapsLink } from "./AddressPicker";
 import AddressPicker from "./AddressPicker";
 import AddToCalendar from "./AddToCalendar";
@@ -24,7 +24,7 @@ const STATUS_COLOR = { escrow: "bg-amber-500/15 text-amber-300 border-amber-500/
  * mode="vip"     → shows only VIP bookings (booked via a member's VIP section).
  */
 export default function DateBookingList({ mode = "regular", onItems, filter = "all" }) {
-  const { lang, refreshUser, meta } = useApp();
+  const { lang, refreshUser, meta, user } = useApp();
   const pct = Math.round((meta?.cancel_refund_pct ?? 0.5) * 100);
   const [data, setData] = useState({ outgoing: [], incoming: [] });
   const [busyId, setBusyId] = useState(null);
@@ -291,6 +291,8 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
     </div>
       {started && !underReview && b.status !== "released" && <DateStartedNote id={b.id} />}
       {reportFor === b.id && <DateReportForm id={b.id} onSubmit={(p) => submitReport(b.id, p)} />}
+      {b.report && b.report.reporter_id !== user?.id && <ReportReplyBlock id={b.id} info={{ by_me: false, reasons: b.report.reasons, details: b.report.details, status: b.report.status || "open", replied: !!b.report.reply }}
+        onSubmit={async (p) => { await api.post(`/dates/report/${b.id}/reply`, p); await load(); }} />}
     </div>
   ); };
 

@@ -13,7 +13,7 @@ import CancelledDates from "../components/CancelledDates";
 import { SectionTitle, Stat, EmptyLine, EmptyDates, FilterBar } from "../components/DatesUI";
 import CountdownBadge from "../components/CountdownBadge";
 import LiveLocation from "../components/LiveLocation";
-import DateReportForm, { DateStartedNote } from "../components/DateReportForm";
+import DateReportForm, { DateStartedNote, ReportReplyBlock } from "../components/DateReportForm";
 import { matchesFilter, countByFilter } from "../lib/dateFilters";
 import AddToCalendar from "../components/AddToCalendar";
 
@@ -317,6 +317,7 @@ function DateCard({ d, reload }) {
         venue={d.location?.lat != null && d.location?.lng != null ? `${d.location.lat},${d.location.lng}` : [d.location?.venue, d.location?.address, d.location?.city, d.location?.country].filter(Boolean).join(", ")} /></div>}
 
       {showReport && <DateReportForm id={d.id} onSubmit={submitReport} />}
+      {d.report_info && !d.report_info.by_me && <div className="mt-3"><ReportReplyBlock id={d.id} info={d.report_info} onSubmit={async (p) => { await post("/report/reply", p); await reload(); }} /></div>}
       {showVerify && (
         <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2" data-testid={`verify-form-${d.id}`}>
           <div className="text-xs text-emerald-200">{tr("id_verify_hint")}</div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Navigation, MapPin, Radio, LifeBuoy, Heart } from "lucide-react";
+import { Navigation, MapPin, Radio, LifeBuoy, Heart, Siren } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
@@ -16,6 +16,7 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
   const [info, setInfo] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [to, setTo] = useState({ to_date: true, to_support: false });
+  const [sosBusy, setSosBusy] = useState(false);
   const watch = useRef(null), last = useRef(0), pos = useRef(null), toRef = useRef(to);
   const base = `/live-location/${kind}/${id}`;
 
@@ -49,6 +50,22 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
     setTo(v); toRef.current = v;
     if (!v.to_date && !v.to_support) { if (sharing) stop(); return; }
     if (sharing && pos.current) await api.post(base, { ...pos.current, ...v, sharing: true }).then(load).catch(() => {});
+  };
+  const sendSos = async () => {
+    if (!window.confirm(t("sos_confirm", lang))) return;
+    setSosBusy(true);
+    const p = await new Promise(res => navigator.geolocation
+      ? navigator.geolocation.getCurrentPosition(x => res({ lat: x.coords.latitude, lng: x.coords.longitude }), () => res({}), { enableHighAccuracy: true, timeout: 8000 })
+      : res({}));
+    try {
+      await api.post(`/sos/${kind}/${id}`, p);
+      toast.success(t("sos_sent", lang), { duration: 10000 });
+      const v = { ...toRef.current, to_support: true }; setTo(v); toRef.current = v;
+      if (p.lat != null) { pos.current = p; await api.post(base, { ...p, ...v, sharing: true }).catch(() => {}); }
+      if (watch.current == null) start();
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || t("failed", lang)); }
+    finally { setSosBusy(false); }
   };
   const chip = (k, Icon, label) => (
     <button type="button" onClick={() => toggleTo(k)} data-testid={`live-loc-share-${k === "to_date" ? "date" : "support"}-${id}`}
@@ -87,6 +104,11 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
             src={`https://maps.google.com/maps?q=${o.lat},${o.lng}&z=15&output=embed`} />
         </div>
       ) : <div className="text-xs text-slate-500" data-testid={`live-loc-waiting-${id}`}>{t("ll_not_shared", lang).replace("{name}", otherName || "")}</div>}
+      <div className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2" data-testid={`sos-block-${id}`}>
+        <span className="text-[11px] text-red-200 flex-1">{t("sos_hint", lang)}</span>
+        <Button size="sm" disabled={sosBusy} onClick={sendSos} data-testid={`sos-btn-${id}`} className="h-8 bg-red-600 hover:bg-red-500 text-white border-0 font-bold tracking-wider active:scale-95 transition-transform">
+          <Siren size={14} className={`me-1 ${sosBusy ? "animate-pulse" : ""}`} />{t("sos_btn", lang)}</Button>
+      </div>
       <div className="flex flex-wrap gap-2">
         {o && <a href={dirUrl(`${o.lat},${o.lng}`)} target="_blank" rel="noreferrer" data-testid={`live-loc-dir-other-${id}`}>
           <Button size="sm" className="h-8 bg-sky-500 hover:bg-sky-400 text-white border-0"><Navigation size={13} className="me-1" />{t("ll_dir_other", lang).replace("{name}", otherName || "")}</Button></a>}

@@ -11,7 +11,7 @@ import AdminVerifications from "../components/AdminVerifications";
 import AdminSupport from "../components/AdminSupport";
 import AdminTranslations from "../components/AdminTranslations";
 import AdminLiveLocations from "../components/AdminLiveLocations";
-import AdminBookingReports, { ReportPhotos } from "../components/AdminBookingReports";
+import AdminBookingReports, { ReportPhotos, ReplyView } from "../components/AdminBookingReports";
 
 export default function Admin() {
   const { lang } = useApp();
@@ -101,7 +101,7 @@ export default function Admin() {
                 <div className="flex-1 min-w-[260px]">
                   <div className="text-sm"><b>{d.inviter?.name}</b> → <b>{d.recipient?.name}</b> · <span className="uppercase text-rose-300">{t(`ds_${d.status}`, lang) === `ds_${d.status}` ? d.status : t(`ds_${d.status}`, lang)}</span></div>
                   <div className="text-xs text-slate-400">{(d.chosen_idea || {}).name || "—"} · 🪙{d.total_hold || d.coins} · {(d.location || {}).venue || ""}</div>
-                  {d.report && <div className="text-xs text-rose-300 mt-1" data-testid={`admin-date-report-${d.id}`}>REPORT: {(d.report.reasons || []).join(", ")} — "{d.report.details}"{d.report.evidence ? ` · evidence: ${d.report.evidence}` : ""}<ReportPhotos photos={d.report.photos} testid={`admin-date-report-photos-${d.id}`} /></div>}
+                  {d.report && <div className="text-xs text-rose-300 mt-1" data-testid={`admin-date-report-${d.id}`}>REPORT: {(d.report.reasons || []).join(", ")} — "{d.report.details}"{d.report.evidence ? ` · evidence: ${d.report.evidence}` : ""}<ReportPhotos photos={d.report.photos} testid={`admin-date-report-photos-${d.id}`} /><ReplyView reply={d.report.reply} testid={`admin-date-reply-${d.id}`} /></div>}
                   {d.verification?.photo && <a href={fileUrl(d.verification.photo)} target="_blank" rel="noreferrer" className="text-xs text-emerald-300 underline" data-testid={`admin-date-photo-${d.id}`}>{t("ad_view_photo", lang)} ({d.verification.status})</a>}
                 </div>
                 {d.verification?.status === "pending" && <>

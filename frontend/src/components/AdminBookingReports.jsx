@@ -10,6 +10,13 @@ export const ReportPhotos = ({ photos, testid }) => photos?.length ? (
   </div>
 ) : null;
 
+export const ReplyView = ({ reply, testid }) => (
+  <div className="mt-2 text-xs rounded-md border border-white/10 bg-white/5 p-2" data-testid={testid}>
+    {reply ? <><div className="text-sky-200">Reply from the reported person: "{reply.details}"</div><ReportPhotos photos={reply.photos} testid={`${testid}-photos`} /></>
+      : <span className="text-slate-500">No reply from the reported person yet.</span>}
+  </div>
+);
+
 export default function AdminBookingReports() {
   const [rows, setRows] = useState([]);
   const load = () => api.get("/admin/booking-reports").then(r => setRows(r.data.bookings || [])).catch(() => {});
@@ -34,6 +41,7 @@ export default function AdminBookingReports() {
               <div className="text-xs text-slate-400">{new Date(b.scheduled_at).toLocaleString()} · reported by {reporter?.name}</div>
               <div className="text-xs text-rose-300 mt-1">{(r.reasons || []).join(", ")} — "{r.details}"{r.evidence ? ` · evidence: ${r.evidence}` : ""}</div>
               <ReportPhotos photos={r.photos} testid={`admin-booking-report-photos-${b.id}`} />
+              <ReplyView reply={r.reply} testid={`admin-booking-reply-${b.id}`} />
             </div>
             {open && <>
               <Button size="sm" variant="outline" onClick={() => resolve(b, "refund_booker")} className="bg-white/5 border-white/15" data-testid={`admin-booking-refund-${b.id}`}>Refund booker</Button>
