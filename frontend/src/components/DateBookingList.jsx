@@ -5,7 +5,8 @@ import { t } from "../lib/i18n";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
-import { CalendarHeart, Camera, Clock, Check, X, Car, Info, Coins } from "lucide-react";
+import { CalendarHeart, Camera, Clock, Check, X, Car, Info, Coins, Flag } from "lucide-react";
+import DateReportForm, { DateStartedNote } from "./DateReportForm";
 import { MapsLink } from "./AddressPicker";
 import AddressPicker from "./AddressPicker";
 import AddToCalendar from "./AddToCalendar";
@@ -29,6 +30,7 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
   const [busyId, setBusyId] = useState(null);
   const [taxiFor, setTaxiFor] = useState(null); // { id, coins }
   const [meetFor, setMeetFor] = useState(null);
+  const [reportFor, setReportFor] = useState(null);
   const [meetLoc, setMeetLoc] = useState({});
   const [chosenActivity, setChosenActivity] = useState({}); // { bookingId: activityText }
   const inputRef = useRef();
@@ -130,8 +132,16 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
     finally { setBusyId(null); e.target.value = ""; }
   };
 
-  const Row = ({ b, isIncoming }) => (
-    <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row gap-3 sm:items-center card-lift" data-testid={`date-row-${b.id}`}>
+  const submitReport = async (bid, payload) => { await api.post(`/dates/report/${bid}`, payload); setReportFor(null); await load(); };
+  const timing = (b) => {
+    const s = new Date(b.scheduled_at).getTime(), n = Date.now();
+    const live = ["accepted", "confirmed"].includes(b.status);
+    return { started: live && n >= s, canReport: live && n >= s && n <= s + 24 * 3600 * 1000 && !b.report };
+  };
+
+  const Row = ({ b, isIncoming }) => { const { started, canReport } = timing(b); const underReview = b.report && (b.report.status || "open") === "open"; return (
+    <div className="glass rounded-2xl p-4 flex flex-col gap-3 card-lift" data-testid={`date-row-${b.id}`}>
+    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
       {b.photo_url && <img src={fileUrl(b.photo_url)} alt="" className="w-full sm:w-24 h-24 rounded-xl object-cover"/>}
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-1"><CalendarHeart size={14} className="text-rose-400"/><span className="font-serif-luxe text-lg">{b.venue}</span></div>
@@ -259,7 +269,7 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
             </div>
           );
         })()}
-        {!isIncoming && (b.status === "escrow" || b.status === "accepted" || (b.status === "confirmed" && b.auto_confirmed)) && (() => {
+        {!isIncoming && !started && (b.status === "escrow" || b.status === "accepted" || (b.status === "confirmed" && b.auto_confirmed)) && (() => {
           const sched = new Date(b.scheduled_at), lockEnd = new Date(sched.getTime() + 24 * 3600 * 1000), nowD = new Date();
           const locked = nowD >= sched && nowD < lockEnd;
           return (
@@ -269,7 +279,9 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
             </div>
           );
         })()}
-        {isIncoming && (b.status === "accepted" || (b.status === "confirmed" && b.auto_confirmed)) && (
+        {underReview && <span className="text-[11px] px-2 py-1 rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-200 self-center" data-testid={`date-reported-${b.id}`}>{t("rp_under_review", lang)}</span>}
+        {canReport && <Button data-testid={`date-report-${b.id}`} onClick={() => setReportFor(v => v === b.id ? null : b.id)} variant="outline" className="bg-rose-500/10 border-rose-500/40 text-rose-300"><Flag size={14} className="me-1" />{t("id_report_this", lang)}</Button>}
+        {isIncoming && !started && (b.status === "accepted" || (b.status === "confirmed" && b.auto_confirmed)) && (
           <div className="flex flex-col items-start gap-1">
             <Button data-testid={`date-recipient-cancel-btn-${b.id}`} disabled={busyId===b.id} onClick={() => cancel(b, true)} variant="outline" className="bg-rose-500/10 border-rose-500/40 text-rose-300 hover:bg-rose-500/20"><X size={14} className="me-1"/> {t("cancel_meeting", lang)}</Button>
             <span data-testid={`date-recipient-cancel-note-${b.id}`} className="text-[11px] text-violet-300/90">↩️ {t("cancel_recipient_note", lang)}</span>
@@ -277,7 +289,10 @@ export default function DateBookingList({ mode = "regular", onItems, filter = "a
         )}
       </div>
     </div>
-  );
+      {started && !underReview && b.status !== "released" && <DateStartedNote id={b.id} />}
+      {reportFor === b.id && <DateReportForm id={b.id} onSubmit={(p) => submitReport(b.id, p)} />}
+    </div>
+  ); };
 
   return (
     <>

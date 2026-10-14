@@ -13,6 +13,7 @@ import CancelledDates from "../components/CancelledDates";
 import { SectionTitle, Stat, EmptyLine, EmptyDates, FilterBar } from "../components/DatesUI";
 import CountdownBadge from "../components/CountdownBadge";
 import LiveLocation from "../components/LiveLocation";
+import DateReportForm, { DateStartedNote } from "../components/DateReportForm";
 import { matchesFilter, countByFilter } from "../lib/dateFilters";
 import AddToCalendar from "../components/AddToCalendar";
 
@@ -97,11 +98,6 @@ function Countdown({ to, label }) {
   return <span className="font-mono-num text-amber-300">{label} {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(ss).padStart(2, "0")}</span>;
 }
 
-const REASONS = [
-  ["reason_no_show", "No-show"], ["reason_cancelled_last", "Cancelled last minute"], ["reason_misleading", "Misleading profile"],
-  ["reason_rude", "Rude or disrespectful"], ["reason_uncomfortable", "Made me uncomfortable"], ["reason_harassment", "Harassment"],
-  ["reason_money", "Asked for money"], ["reason_scam", "Suspicious / scam"], ["reason_unsafe", "Unsafe situation"], ["reason_other", "Other"],
-];
 
 function DateCard({ d, reload }) {
   const { lang, user } = useApp();
@@ -113,7 +109,6 @@ function DateCard({ d, reload }) {
   const [venue, setVenue] = useState("");
   const [taxi, setTaxi] = useState(""); const [pickup, setPickup] = useState({});
   const [showReport, setShowReport] = useState(false);
-  const [reasons, setReasons] = useState([]); const [details, setDetails] = useState(""); const [evidence, setEvidence] = useState("");
   const [showVerify, setShowVerify] = useState(false); const [vfile, setVfile] = useState(null); const [vok, setVok] = useState(false);
   const isInv = d.role === "inviter";
   const w = d.windows || {};
@@ -178,10 +173,8 @@ function DateCard({ d, reload }) {
     if (window.confirm(msg + "\n\n" + tr("id_reject_location_confirm"))) act(() => post("/cancel"));
   };
 
-  const submitReport = () => act(async () => {
-    if (details.trim().length < 10) { throw { response: { data: { detail: tr("id_report_min") } } }; }
-    await post("/report", { reasons, details, evidence }); toast.success(tr("id_report_submitted")); setShowReport(false);
-  });
+  const started = !!d.location?.scheduled_start && nowMs >= new Date(d.location.scheduled_start).getTime();
+  const submitReport = async (payload) => { await post("/report", payload); setShowReport(false); await reload(); };
   const submitVerify = () => act(async () => {
     if (!vfile || !vok) { throw { response: { data: { detail: tr("id_verify_required") } } }; }
     const fd = new FormData(); fd.append("file", vfile); fd.append("confirm", "true"); fd.append("note", "");
@@ -309,10 +302,12 @@ function DateCard({ d, reload }) {
           </div>
         )}
         {d.status === "DATE_CONFIRMED" && isInv && d.transportation?.type === "pickup" && !cancelLocked && <SwitchToTaxi d={d} busy={busy} onSend={() => act(async () => { const r = await post("/pickup/switch-to-taxi"); toast.success(tr("sw_sent_toast", { n: r.data.taxi_amount })); })} />}
-        {!TERMINAL.includes(d.status) && d.status !== "PHOTO_VERIFICATION_PENDING" && !(d.status === "INVITATION_SENT" && !isInv) && (
+        {!TERMINAL.includes(d.status) && d.status !== "PHOTO_VERIFICATION_PENDING" && !(d.status === "INVITATION_SENT" && !isInv) && !started && (
           <Button data-testid={`date-cancel-${d.id}`} disabled={busy} onClick={cancelDate} variant="outline" className="h-9 bg-rose-500/10 border-rose-500/40 text-rose-300 hover:bg-rose-500/20"><X size={14} className="me-1" />{tr("id_cancel_date")}</Button>
         )}
-        {reportOpen && <Button data-testid={`date-report-${d.id}`} onClick={() => setShowReport(v => !v)} variant="outline" className="h-9 bg-rose-500/10 border-rose-500/40 text-rose-300"><Flag size={14} className="me-1" />{tr("id_report_this")}</Button>}
+        {started && !TERMINAL.includes(d.status) && <DateStartedNote id={d.id} />}
+        {d.report && <span className="text-[11px] px-2 py-1 rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-200 self-center" data-testid={`date-reported-${d.id}`}>{tr("rp_under_review")}</span>}
+        {reportOpen && !d.report && <Button data-testid={`date-report-${d.id}`} onClick={() => setShowReport(v => !v)} variant="outline" className="h-9 bg-rose-500/10 border-rose-500/40 text-rose-300"><Flag size={14} className="me-1" />{tr("id_report_this")}</Button>}
         {canVerify && ["DATE_CONFIRMED", "DATE_COMPLETED_PENDING_VERIFICATION"].includes(d.status) &&
           <Button data-testid={`date-verify-${d.id}`} onClick={() => setShowVerify(v => !v)} variant="outline" className="h-9 bg-emerald-500/10 border-emerald-500/40 text-emerald-300"><Camera size={14} className="me-1" />{tr("id_send_photo_conf")}</Button>}
         {chatEnabled && <Button data-testid={`date-chat-toggle-${d.id}`} onClick={() => setShowChat(v => !v)} variant="outline" className="h-9 bg-sky-500/10 border-sky-500/40 text-sky-300"><MessageCircle size={14} className="me-1" />{tr("id_chat")}</Button>}
@@ -321,17 +316,7 @@ function DateCard({ d, reload }) {
       {d.status === "DATE_CONFIRMED" && <div className="mt-3"><LiveLocation kind="invite" id={d.id} otherName={d.other?.name}
         venue={d.location?.lat != null && d.location?.lng != null ? `${d.location.lat},${d.location.lng}` : [d.location?.venue, d.location?.address, d.location?.city, d.location?.country].filter(Boolean).join(", ")} /></div>}
 
-      {showReport && (
-        <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/5 p-3 space-y-2" data-testid={`report-form-${d.id}`}>
-          <div className="text-xs font-semibold text-rose-200 flex items-center gap-1"><ShieldAlert size={13} />{tr("id_report_title")}</div>
-          <div className="flex flex-wrap gap-1.5">{REASONS.map(([k, v]) => (
-            <button key={k} onClick={() => setReasons(s => s.includes(v) ? s.filter(x => x !== v) : [...s, v])}
-              className={`text-[11px] px-2 py-1 rounded-full border ${reasons.includes(v) ? "bg-rose-500/20 border-rose-500/50 text-rose-200" : "bg-white/5 border-white/10 text-slate-400"}`}>{tr(k)}</button>))}</div>
-          <textarea data-testid={`report-details-${d.id}`} value={details} onChange={e => setDetails(e.target.value)} placeholder={tr("id_report_details_ph")} className="w-full bg-white/5 border border-white/10 rounded-md p-2 text-sm text-slate-200 min-h-[70px]" />
-          <Input data-testid={`report-evidence-${d.id}`} value={evidence} onChange={e => setEvidence(e.target.value)} placeholder={tr("id_report_evidence_ph")} className="bg-white/5 border-white/10 h-9" />
-          <Button data-testid={`report-submit-${d.id}`} disabled={busy} onClick={submitReport} className="rose-btn text-white border-0 h-9">{tr("id_submit_report")}</Button>
-        </div>
-      )}
+      {showReport && <DateReportForm id={d.id} onSubmit={submitReport} />}
       {showVerify && (
         <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2" data-testid={`verify-form-${d.id}`}>
           <div className="text-xs text-emerald-200">{tr("id_verify_hint")}</div>
