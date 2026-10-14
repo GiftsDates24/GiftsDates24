@@ -1675,7 +1675,10 @@ async def list_profiles(
     if online_nearby: conds.append({"last_seen": {"$gt": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()}})
     now_iso = datetime.now(timezone.utc).isoformat()
     if premium_only: conds.append({"premium_until": {"$gt": now_iso}})
-    if vip_filter: conds.append({"vip_until": {"$gt": now_iso}}); conds.append({"vip.published": {"$ne": False}})
+    if vip_filter:
+        conds.append({"vip_until": {"$gt": now_iso}}); conds.append({"vip.published": {"$ne": False}})
+        # members with "Show VIP on my main profile" off are only discoverable as VIP by VIP viewers
+        if not is_vip(user): conds.append({"vip.show_on_main": {"$ne": False}})
     if vip_categories:
         cats = [c.strip() for c in vip_categories.split(",") if c.strip() in VIP_SERVICES]
         names = [s for c in cats for s in VIP_SERVICES[c]]
@@ -1750,10 +1753,10 @@ async def list_profiles(
         # In the VIP section, listings posted "separately" appear as their own anonymous card
         results = [_vip_listing_card(p) for p in results]
     else:
-        # On the main feed, hide the VIP status of members who turned "Show VIP on my main profile" off
+        # On the main feed, hide the VIP status of members who turned "Show VIP on my main profile" off (VIP viewers still see it)
         for p in results:
             v = p.get("vip") or {}
-            if not v.get("show_on_main", True):
+            if not is_vip(user) and not v.get("show_on_main", True):
                 p["is_vip"] = False
     # Distance from the viewer (or a Travel-mode origin) to each profile (km). Exact coords are never exposed.
     if origin_lat is not None and origin_lng is not None:
@@ -1880,7 +1883,7 @@ async def profile_detail(pid: str, user=Depends(get_current_user)):
     p["is_premium_lite"] = is_premium_lite(p)
     # Hide the VIP status on the main profile when "Show VIP on my main profile" is off
     _v = p.get("vip") or {}
-    if pid != user["id"] and not _v.get("show_on_main", True):
+    if pid != user["id"] and not is_vip(user) and not _v.get("show_on_main", True):
         p["is_vip"] = False
     p["liked_by_me"] = bool(await db.likes.find_one({"from_id": user["id"], "to_id": pid}))
     m = await db.matches.find_one({"users": {"$all": [user["id"], pid]}})
