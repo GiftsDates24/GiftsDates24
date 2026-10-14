@@ -208,13 +208,13 @@ export default function VipEditor() {
           </div>
           <Switch data-testid="vip-publish-switch" checked={isVip && published} onCheckedChange={onTogglePublish} />
         </div>
-        <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-amber-500/20" data-testid="vip-show-on-main-row">
+        {isVip && <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-amber-500/20" data-testid="vip-show-on-main-row">
           <div className="ps-8">
             <div className="text-sm font-semibold text-amber-100">{t("vip_show_on_main", lang)}</div>
             <div className={`text-[11px] ${showOnMain ? "text-slate-400" : "text-amber-300"}`} data-testid="vip-show-on-main-note">{t(showOnMain ? "vip_show_on_main_on" : "vip_show_on_main_off", lang)}</div>
           </div>
           <Switch data-testid="vip-show-on-main-switch" checked={showOnMain} onCheckedChange={setShowOnMain} />
-        </div>
+        </div>}
         {!isVip && (
           <Button data-testid="vip-buy-publish-cta" onClick={goBuyVip} className="rose-btn text-white border-0 mt-3 w-full sm:w-auto"><Sparkles size={16} className="me-1" /> {t("vip_buy_publish", lang)}</Button>
         )}

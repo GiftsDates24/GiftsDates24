@@ -43,3 +43,4 @@ React (CRA/craco) + FastAPI (server.py, ~4.9k lines) + MongoDB. JWT email/passwo
 - VIP visibility toggle (2026-10-14): 'Show VIP on my main profile' moved into the Publish-in-VIP box (VipEditor.jsx), works for both post modes; when off, is_vip is hidden from others on the main feed and profile view (server.py search/profile). Saved with the VIP Save button.
 - VIP visibility exception (2026-10-14): with show_on_main off, VIP viewers still see the member as VIP (badge, profile) and find them in vip_only search; non-VIP viewers don't. iteration_12: 100%.
 - VIP hidden -> Premium (2026-10-14): non-VIP viewers see hidden VIP members as Premium (is_premium=true). VIP members without premium_until now correctly show the VIP badge on Browse (lite/rest buckets use is_vip). iteration_13: 100%.
+- 'Show VIP on my main profile' row rendered only for active VIP members (VipEditor isVip) (2026-10-14).
