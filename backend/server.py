@@ -1746,8 +1746,8 @@ async def list_profiles(
     rest_limit = max(limit - len(top) - len(lite), 0)
     rest = await db.users.find({"$and": conds + _not_premium + _not_lite}, proj).sort("id", 1).limit(rest_limit).to_list(rest_limit) if rest_limit else []
     for p in top: p["is_premium"] = True; p["is_vip"] = is_vip(p); p["is_premium_lite"] = False
-    for p in lite: p["is_premium"] = False; p["is_vip"] = False; p["is_premium_lite"] = True
-    for p in rest: p["is_premium"] = False; p["is_vip"] = False; p["is_premium_lite"] = False
+    for p in lite: p["is_premium"] = False; p["is_vip"] = is_vip(p); p["is_premium_lite"] = True
+    for p in rest: p["is_premium"] = False; p["is_vip"] = is_vip(p); p["is_premium_lite"] = False
     results = top + lite + rest
     if vip_filter:
         # In the VIP section, listings posted "separately" appear as their own anonymous card
@@ -1756,8 +1756,8 @@ async def list_profiles(
         # On the main feed, hide the VIP status of members who turned "Show VIP on my main profile" off (VIP viewers still see it)
         for p in results:
             v = p.get("vip") or {}
-            if not is_vip(user) and not v.get("show_on_main", True):
-                p["is_vip"] = False
+            if not is_vip(user) and not v.get("show_on_main", True) and p.get("is_vip"):
+                p["is_vip"] = False; p["is_premium"] = True
     # Distance from the viewer (or a Travel-mode origin) to each profile (km). Exact coords are never exposed.
     if origin_lat is not None and origin_lng is not None:
         vlat, vlng = origin_lat, origin_lng
@@ -1883,8 +1883,8 @@ async def profile_detail(pid: str, user=Depends(get_current_user)):
     p["is_premium_lite"] = is_premium_lite(p)
     # Hide the VIP status on the main profile when "Show VIP on my main profile" is off
     _v = p.get("vip") or {}
-    if pid != user["id"] and not is_vip(user) and not _v.get("show_on_main", True):
-        p["is_vip"] = False
+    if pid != user["id"] and not is_vip(user) and not _v.get("show_on_main", True) and p["is_vip"]:
+        p["is_vip"] = False; p["is_premium"] = True
     p["liked_by_me"] = bool(await db.likes.find_one({"from_id": user["id"], "to_id": pid}))
     m = await db.matches.find_one({"users": {"$all": [user["id"], pid]}})
     p["conversation_id"] = m["id"] if m else None

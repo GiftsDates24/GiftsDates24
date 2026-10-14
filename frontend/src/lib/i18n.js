@@ -211,7 +211,7 @@ const T = {
   sos_btn: { en: "SOS" },
   chat_from_date: { en: "Sent from date chat" },
   vip_show_on_main_on: { en: "On: your VIP badge is visible on your main profile." },
-  vip_show_on_main_off: { en: "Off: no one can see your VIP status, except VIP members — they can still find you as VIP in search." },
+  vip_show_on_main_off: { en: "Off: only VIP members see your VIP status and can find you as VIP in search. Everyone else sees you as Premium." },
   sos_contacts: { en: "Your trusted contacts ({n}) were alerted too." },
   tc_title: { en: "Trusted contacts" },
   tc_desc: { en: "Add up to 3 friends or family members. If you press SOS during a date, they get an email (and a text message when available) with a link to your live location." },
