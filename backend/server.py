@@ -3745,6 +3745,20 @@ def _vs_gen_slots(block: dict, bookings: list):
         s += L
     return out
 
+VIP_DURATIONS = (60, 120, 180)
+
+async def _vs_normal_locks(vip_id, date):
+    """Normal-date lock windows (already include the 15-min buffer) of the VIP on a day."""
+    u = await db.users.find_one({"id": vip_id}, {"_id": 0})
+    return (await _taken_blocks(u)).get(date, []) if u else []
+
+async def _vs_extra_checks(vip_id, date, cs, ce):
+    if ce - cs not in VIP_DURATIONS: raise HTTPException(400, "BAD_DURATION")
+    for b in await _vs_normal_locks(vip_id, date):
+        lf, lt = _hm_to_min(b["lock_from"]), _hm_to_min(b["lock_to"])
+        if lt <= lf: lt += 24 * 60
+        if cs < lt and lf < ce: raise HTTPException(409, "SLOT_TAKEN")
+
 async def _vs_requester_card(uid: str) -> dict:
     u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "name": 1, "age": 1, "city": 1, "country": 1, "photos": 1})
     if not u:
@@ -3852,8 +3866,19 @@ async def vs_public_slots(vip_id: str, user=Depends(get_current_user)):
         slots = _vs_gen_slots(blk, day_bk)
         by_date.setdefault(blk["date"], {"date": blk["date"], "tz": blk.get("tz") or tz, "slots": []})
         by_date[blk["date"]]["slots"].extend(slots)
+    for blk in blocks:
+        dd = by_date[blk["date"]]
+        dd.setdefault("windows", []).append({"from": blk["start"], "to": blk["end"]})
+    for dd in by_date.values():
+        taken = [{"from": b["start"], "to": b["end"], "status": b["status"],
+                  "lock_from": _min_to_hm(max(0, _hm_to_min(b["start"]) - VIP_SCHED_BUFFER)),
+                  "lock_to": _min_to_hm(_hm_to_min(b["end"]) + VIP_SCHED_BUFFER)}
+                 for b in active if b["date"] == dd["date"]]
+        taken += [{"from": b["from"], "to": b["to"], "status": "date", "lock_from": b["lock_from"], "lock_to": b["lock_to"]}
+                  for b in await _vs_normal_locks(vip_id, dd["date"])]
+        dd["taken"] = taken
     days = sorted(by_date.values(), key=lambda d: d["date"])
-    return {"tz": tz, "buffer": VIP_SCHED_BUFFER, "days": days}
+    return {"tz": tz, "buffer": VIP_SCHED_BUFFER, "durations": list(VIP_DURATIONS), "days": days}
 
 @api.post("/vip/schedule/{vip_id}/book")
 async def vs_book(vip_id: str, req: VipSchedBookReq, user=Depends(get_current_user)):
@@ -3887,6 +3912,7 @@ async def vs_book(vip_id: str, req: VipSchedBookReq, user=Depends(get_current_us
                                      {"_id": 0, "start": 1, "end": 1}).to_list(500)
     if _vs_conflict(cs, ce, active, ref_start=ref_start):
         raise HTTPException(409, "SLOT_TAKEN")
+    await _vs_extra_checks(vip_id, req.date, cs, ce)
     now = datetime.now(timezone.utc)
     tz = req.tz or (blocks[0]["tz"] if blocks else (target.get("timezone") or "UTC"))
     bid = str(uuid.uuid4())
@@ -4054,6 +4080,7 @@ async def vs_reschedule(bid: str, req: VipRescheduleReq, user=Depends(get_curren
                                      {"_id": 0, "start": 1, "end": 1}).to_list(500)
     if _vs_conflict(cs, ce, active, ref_start=ref_start):
         raise HTTPException(409, "SLOT_TAKEN")
+    await _vs_extra_checks(vip_id, req.date, cs, ce)
     now = datetime.now(timezone.utc).isoformat()
     await db.vip_sched.update_one({"id": bid}, {"$set": {
         "date": req.date, "start": req.start, "end": req.end,

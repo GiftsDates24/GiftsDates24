@@ -7,6 +7,8 @@ import { Calendar, Clock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../lib/api";
 import { useApp } from "../context/AppContext";
+import TimeChooser from "./TimeChooser";
+import { minHm } from "../lib/availability";
 
 const fmtDay = (d) => {
   try {
@@ -15,20 +17,15 @@ const fmtDay = (d) => {
   } catch { return d; }
 };
 
-const STATE_STYLE = {
-  available: "bg-emerald-500/10 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/20",
-  pending: "bg-amber-500/10 border-amber-500/40 text-amber-300/70 cursor-not-allowed",
-  confirmed: "bg-sky-500/10 border-sky-500/40 text-sky-300/70 cursor-not-allowed",
-  locked: "bg-rose-500/10 border-rose-500/40 text-rose-300/60 cursor-not-allowed line-through",
-};
-const STATE_LABEL = { available: "Available", pending: "Pending", confirmed: "Confirmed", locked: "Locked" };
+const DURATIONS = [60, 120, 180];
 
 export default function VipScheduleBookModal({ open, onOpenChange, target, defaultCoins, rescheduleId, onDone }) {
   const { user, meta, refreshUser } = useApp();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ days: [], tz: "UTC", buffer: 15 });
   const [day, setDay] = useState(null);
-  const [slot, setSlot] = useState(null);
+  const [startMin, setStartMin] = useState(null);
+  const [dur, setDur] = useState(60);
   const [activity, setActivity] = useState("");
   const [coins, setCoins] = useState(defaultCoins || meta?.date_min_coins || 300);
   const [busy, setBusy] = useState(false);
@@ -48,11 +45,11 @@ export default function VipScheduleBookModal({ open, onOpenChange, target, defau
   }, [target]);
 
   useEffect(() => {
-    if (open) { setSlot(null); setActivity(""); setCoins(defaultCoins || meta?.date_min_coins || 300); load(); }
+    if (open) { setStartMin(null); setDur(60); setActivity(""); setCoins(defaultCoins || meta?.date_min_coins || 300); load(); }
   }, [open, load, defaultCoins, meta]);
 
   const dayObj = (data.days || []).find((d) => d.date === day);
-  const slots = dayObj?.slots || [];
+  const slot = startMin == null ? null : { start: minHm(startMin), end: minHm(startMin + dur) };
 
   const submit = async () => {
     if (!slot) { toast.error("Pick an available time slot"); return; }
@@ -77,6 +74,7 @@ export default function VipScheduleBookModal({ open, onOpenChange, target, defau
       toast.error(
         d === "SLOT_TAKEN" ? "That time was just taken. Please pick another slot."
           : d === "TIME_UNAVAILABLE" ? "This time is not available."
+          : d === "BAD_DURATION" ? "Choose a 1h, 2h or 3h date."
           : d === "CANNOT_BOOK_SELF" ? "You cannot book yourself."
           : d === "NOT_PENDING" ? "This booking can no longer be rescheduled."
           : d === "Insufficient coins" ? "Not enough coins."
@@ -106,7 +104,7 @@ export default function VipScheduleBookModal({ open, onOpenChange, target, defau
               <Label className="text-xs text-slate-400">Choose a day</Label>
               <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1" data-testid="vs-book-days">
                 {data.days.map((d) => (
-                  <button key={d.date} type="button" onClick={() => { setDay(d.date); setSlot(null); }}
+                  <button key={d.date} type="button" onClick={() => { setDay(d.date); setStartMin(null); }}
                     data-testid={`vs-book-day-${d.date}`}
                     className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-mono-num transition-colors ${day === d.date ? "bg-rose-500 border-rose-500 text-white" : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10"}`}>
                     {fmtDay(d.date)}
@@ -116,35 +114,25 @@ export default function VipScheduleBookModal({ open, onOpenChange, target, defau
             </div>
 
             <div>
+              <Label className="text-xs text-slate-400">How long?</Label>
+              <div className="mt-1.5 flex gap-2" data-testid="vs-book-durations">
+                {(data.durations || DURATIONS).map((m) => (
+                  <button key={m} type="button" onClick={() => setDur(m)} data-testid={`vs-book-dur-${m / 60}h`}
+                    className={`flex-1 px-3 py-2 rounded-xl border text-sm font-mono-num transition-colors ${dur === m ? "bg-amber-500 border-amber-500 text-black font-semibold" : "bg-white/5 border-white/10 text-slate-200 hover:bg-white/10"}`}>
+                    {m / 60}h
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
               <div className="flex items-center justify-between">
-                <Label className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12} /> Pick a time</Label>
-                <span className="text-[11px] text-slate-500">Times shown in VIP local time ({dayObj?.tz || data.tz})</span>
+                <Label className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12} /> Pick a start time</Label>
+                <span className="text-[11px] text-slate-500">VIP local time ({dayObj?.tz || data.tz})</span>
               </div>
-              {slots.length === 0 ? (
-                <div className="mt-2 text-xs text-slate-500">No slots this day.</div>
-              ) : (
-                <div className="mt-2 grid grid-cols-3 gap-2" data-testid="vs-book-slots">
-                  {slots.map((s) => {
-                    const selectable = s.state === "available";
-                    const active = slot && slot.start === s.start && slot.end === s.end;
-                    return (
-                      <button key={s.start} type="button" disabled={!selectable}
-                        onClick={() => selectable && setSlot(s)}
-                        data-testid={`vs-book-slot-${s.start}`}
-                        className={`rounded-lg border px-2 py-2 text-xs font-mono-num transition-colors ${active ? "bg-rose-500 border-rose-500 text-white" : STATE_STYLE[s.state]}`}>
-                        <div>{s.start}–{s.end}{s.next_day ? <span className="ml-0.5 text-sky-300/90">+1</span> : ""}</div>
-                        {!selectable && <div className="text-[9px] mt-0.5 no-underline">{STATE_LABEL[s.state]}</div>}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-400">
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500/40 me-1" />Available</span>
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-500/40 me-1" />Pending</span>
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-sky-500/40 me-1" />Confirmed</span>
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-rose-500/40 me-1" />Locked (±{data.buffer}m)</span>
-              </div>
+              <TimeChooser key={`${day}-${dur}`} day={day} wins={dayObj?.windows || []} taken={dayObj?.taken || []} slot={dur}
+                value={startMin} onChange={setStartMin} testid="vs-book-time"
+                note={`Tap an hour, then the minutes. Only start times where the full ${dur / 60}h date fits are shown. Each date locks ${data.buffer} min before and after.`} />
             </div>
 
             <div className={isReschedule ? "hidden" : ""}>

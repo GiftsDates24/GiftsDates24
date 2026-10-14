@@ -17,21 +17,21 @@ const lockOf = (b) => { const f = hmMin(b.lock_from || b.from); let t = hmMin(b.
 // Minutes since midnight that a start must exceed today (past times can't be chosen).
 export const minStartFor = (key) => key === toKey(new Date()) ? new Date().getHours() * 60 + new Date().getMinutes() : -1;
 
-export const freeStarts = (wins = [], taken = [], minStart = -1) => {
+export const freeStarts = (wins = [], taken = [], minStart = -1, slot = SLOT) => {
   const locks = taken.map(lockOf);
   const out = [];
   wins.forEach(w => {
     const { start, end } = winBounds(w);
-    for (let s = start + ((STEP - (start % STEP)) % STEP); s + SLOT <= end; s += STEP)
-      if (s > minStart && !locks.some(([f, t]) => f < s + SLOT && s < t) && !out.includes(s)) out.push(s);
+    for (let s = start + ((STEP - (start % STEP)) % STEP); s + slot <= end; s += STEP)
+      if (s > minStart && !locks.some(([f, t]) => f < s + slot && s < t) && !out.includes(s)) out.push(s);
   });
   return out.sort((a, b) => a - b);
 };
 
 // Back-to-back 2.5h quick picks inside each range.
-export const quickSlots = (wins = []) => {
+export const quickSlots = (wins = [], slot = SLOT) => {
   const out = [];
-  wins.forEach(w => { const { start, end } = winBounds(w); for (let s = start; s + SLOT <= end; s += SLOT) out.push(s); });
+  wins.forEach(w => { const { start, end } = winBounds(w); for (let s = start; s + slot <= end; s += slot) out.push(s); });
   return out;
 };
 
@@ -44,12 +44,12 @@ export const dayWins = (avail, key) => {
 };
 
 // Free time ranges left after removing booked/locked blocks (only where a full date fits).
-export const freeRanges = (wins = [], taken = [], minStart = -1) => {
+export const freeRanges = (wins = [], taken = [], minStart = -1, slot = SLOT) => {
   const out = [];
-  freeStarts(wins, taken, minStart).forEach(st => {
+  freeStarts(wins, taken, minStart, slot).forEach(st => {
     const last = out[out.length - 1];
-    if (last && st - last.s <= STEP) { last.s = st; last.e = st + SLOT; }
-    else out.push({ f: st, s: st, e: st + SLOT });
+    if (last && st - last.s <= STEP) { last.s = st; last.e = st + slot; }
+    else out.push({ f: st, s: st, e: st + slot });
   });
   return out.map(r => ({ from: minHm(r.f), to: minHm(r.e) }));
 };
