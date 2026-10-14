@@ -36,7 +36,7 @@ export default function TimeChooser({ day, wins = [], taken = [], value, onChang
         </div>
         {quick.length > 0 && (
           <div>
-            <div className="text-slate-400 mb-1">{t("quick_slots", lang)}</div>
+            <div className="text-slate-400 mb-1">{slot === SLOT ? t("quick_slots", lang) : t("quick_slots_n", lang).replace("{h}", slot / 60)}</div>
             <div className="flex flex-wrap gap-1.5">
               {quick.map(s => (
                 <button key={s} type="button" onClick={() => onChange(s)} data-testid={`${testid}-quick-${minHm(s)}`}

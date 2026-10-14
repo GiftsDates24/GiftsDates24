@@ -210,6 +210,7 @@ const T = {
   rr_open: { en: "Reply with proofs" },
   sos_btn: { en: "SOS" },
   chat_from_date: { en: "Sent from date chat" },
+  quick_slots_n: { en: "Quick picks ({h}h)" },
   vip_show_on_main_on: { en: "On: your VIP badge is visible on your main profile." },
   vip_show_on_main_off: { en: "Off: only VIP members see your VIP status and can find you as VIP in search. Everyone else sees you as Premium." },
   sos_contacts: { en: "Your trusted contacts ({n}) were alerted too." },
