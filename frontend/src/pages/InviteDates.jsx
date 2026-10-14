@@ -250,11 +250,15 @@ function DateCard({ d, reload }) {
               <Button data-testid={`date-confirm-location-${d.id}`} disabled={busy} onClick={() => act(() => post("/location/confirm"))} className="rose-btn text-white border-0 h-9"><Check size={14} className="me-1" />{tr("id_confirm_location")}</Button>
               <Button data-testid={`date-reject-location-${d.id}`} disabled={busy} onClick={rejectLocation} variant="outline" className="h-9 bg-rose-500/10 border-rose-500/40 text-rose-300"><X size={14} className="me-1" />{tr("id_reject_location")}</Button>
             </div>
-            <div className="flex gap-2 items-center"><Input data-testid={`date-taxi-amount-${d.id}`} type="number" min="1" value={taxi} onChange={e => setTaxi(e.target.value)} placeholder={tr("id_taxi_amount_ph")} className="bg-white/5 border-white/10 h-9 max-w-[160px]" />
-              <Button data-testid={`date-taxi-request-${d.id}`} disabled={busy || !taxi} onClick={() => act(() => post("/taxi/request", { amount: parseInt(taxi) }))} variant="outline" className="h-9 bg-white/5 border-white/15"><Car size={14} className="me-1" />{tr("id_request_taxi")}</Button></div>
-            <div className="flex items-start gap-1.5 text-[11px] text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2" data-testid={`date-reject-location-warning-${d.id}`}>
-              <ShieldAlert size={13} className="mt-0.5 shrink-0 text-amber-300" />
-              <span>{tr("id_reject_location_note", { total: Number(d.total_hold || d.coins || 0) })}</span>
+            <div className="text-[11px] text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 space-y-2" data-testid={`date-reject-location-warning-${d.id}`}>
+              <div className="flex items-start gap-1.5">
+                <ShieldAlert size={13} className="mt-0.5 shrink-0 text-amber-300" />
+                <span>{tr("id_reject_location_note", { total: Number(d.total_hold || d.coins || 0) })}</span>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center ps-5" data-testid={`date-taxi-shortcut-${d.id}`}>
+                <Input data-testid={`date-taxi-amount-${d.id}`} type="number" min="1" value={taxi} onChange={e => setTaxi(e.target.value)} placeholder={tr("id_taxi_amount_ph")} className="bg-white/5 border-amber-500/30 h-9 max-w-[160px] text-slate-100" />
+                <Button data-testid={`date-taxi-request-${d.id}`} disabled={busy || !(parseInt(taxi) > 0)} onClick={() => act(async () => { await post("/taxi/request", { amount: parseInt(taxi) }); toast.success(tr("taxi_requested_toast")); })} className="h-9 bg-amber-500 hover:bg-amber-400 text-black border-0 font-semibold transition-colors"><Car size={14} className="me-1" />{tr("id_request_taxi")}</Button>
+              </div>
             </div>
           </div>
         )}
