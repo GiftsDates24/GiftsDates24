@@ -5008,6 +5008,15 @@ async def invite_slots(did: str, day: str, user=Depends(get_current_user)):
         slots.append({"time": f"{h:02d}:00", "start": _iso(st), "available": not conflict})
     return {"day": day, "busy": [{"start": _iso(s), "end": _iso(e)} for s, e in busy], "slots": slots, "duration_hours": DATE_WINDOW_HOURS}
 
+async def _mirror_to_main_chat(from_id, to_id, text, did):
+    """Copy a date-chat message into the regular conversation between the two people."""
+    conv = await db.conversations.find_one({"users": {"$all": [from_id, to_id]}}, {"id": 1})
+    cid = conv["id"] if conv else (await ensure_match(from_id, to_id, "date"))[0]
+    now = _iso()
+    await db.messages.insert_one({"id": str(uuid.uuid4()), "conversation_id": cid, "from_id": from_id, "text": text,
+                                  "type": "text", "date_id": did, "created_at": now})
+    await db.conversations.update_one({"id": cid}, {"$set": {"last_message": text, "last_at": now}})
+
 DATE_CHAT_STATUSES = {"DATE_CONFIRMED", "DATE_COMPLETED_PENDING_VERIFICATION", "PHOTO_VERIFICATION_PENDING",
                       "COMPLETED", "COMPLETED_AUTO", "REPORTED", "UNDER_ADMIN_REVIEW"}
 
@@ -5028,6 +5037,7 @@ async def invite_send_message(did: str, req: DateMsgReq, user=Depends(get_curren
     msg = {"id": str(uuid.uuid4()), "date_id": did, "from_id": user["id"], "text": text, "created_at": _iso()}
     await db.date_messages.insert_one(dict(msg))
     other = d["recipient_id"] if d["inviter_id"] == user["id"] else d["inviter_id"]
+    await _mirror_to_main_chat(user["id"], other, text, did)
     await notify(other, "date_message", "New date message", f"{user.get('name')}: {text[:80]}",
                  {"date_id": did}, email=False, link=DATES_LINK, cta="Open chat")
     return {"ok": True, "message": msg}

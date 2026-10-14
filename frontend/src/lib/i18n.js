@@ -209,6 +209,7 @@ const T = {
   rr_you_were_reported: { en: "This date was reported to support. Please reply with your side and photo proofs — if you don't reply, the coins may be refunded to the other person." },
   rr_open: { en: "Reply with proofs" },
   sos_btn: { en: "SOS" },
+  chat_from_date: { en: "Sent from date chat" },
   sos_contacts: { en: "Your trusted contacts ({n}) were alerted too." },
   tc_title: { en: "Trusted contacts" },
   tc_desc: { en: "Add up to 3 friends or family members. If you press SOS during a date, they get an email (and a text message when available) with a link to your live location." },
