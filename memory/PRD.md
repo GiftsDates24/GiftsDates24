@@ -41,3 +41,4 @@ React (CRA/craco) + FastAPI (server.py, ~4.9k lines) + MongoDB. JWT email/passwo
 - Taxi shortcut (2026-10-14): taxi amount + Request Taxi button moved inside the reject-location warning on incoming LOCATION_PROPOSED dates.
 - Date chat mirroring (2026-10-14): every date-chat message (POST /api/invites/{id}/messages) is also posted into the main conversation between the two users (created via ensure_match if missing), tagged date_id and shown with a 'Sent from date chat' label in Chats.
 - VIP visibility toggle (2026-10-14): 'Show VIP on my main profile' moved into the Publish-in-VIP box (VipEditor.jsx), works for both post modes; when off, is_vip is hidden from others on the main feed and profile view (server.py search/profile). Saved with the VIP Save button.
+- VIP visibility exception (2026-10-14): with show_on_main off, VIP viewers still see the member as VIP (badge, profile) and find them in vip_only search; non-VIP viewers don't. iteration_12: 100%.
