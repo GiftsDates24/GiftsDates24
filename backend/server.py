@@ -1750,10 +1750,10 @@ async def list_profiles(
         # In the VIP section, listings posted "separately" appear as their own anonymous card
         results = [_vip_listing_card(p) for p in results]
     else:
-        # On the main feed, hide any VIP hint for listings posted separately with show_on_main disabled
+        # On the main feed, hide the VIP status of members who turned "Show VIP on my main profile" off
         for p in results:
             v = p.get("vip") or {}
-            if v.get("post_mode") == "separate" and not v.get("show_on_main", True):
+            if not v.get("show_on_main", True):
                 p["is_vip"] = False
     # Distance from the viewer (or a Travel-mode origin) to each profile (km). Exact coords are never exposed.
     if origin_lat is not None and origin_lng is not None:
@@ -1878,9 +1878,9 @@ async def profile_detail(pid: str, user=Depends(get_current_user)):
     p["is_premium"] = is_premium(p)
     p["is_vip"] = is_vip(p)
     p["is_premium_lite"] = is_premium_lite(p)
-    # Hide the VIP hint on the main profile when the listing is posted separately with show_on_main off
+    # Hide the VIP status on the main profile when "Show VIP on my main profile" is off
     _v = p.get("vip") or {}
-    if _v.get("post_mode") == "separate" and not _v.get("show_on_main", True):
+    if pid != user["id"] and not _v.get("show_on_main", True):
         p["is_vip"] = False
     p["liked_by_me"] = bool(await db.likes.find_one({"from_id": user["id"], "to_id": pid}))
     m = await db.matches.find_one({"users": {"$all": [user["id"], pid]}})

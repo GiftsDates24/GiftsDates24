@@ -208,6 +208,13 @@ export default function VipEditor() {
           </div>
           <Switch data-testid="vip-publish-switch" checked={isVip && published} onCheckedChange={onTogglePublish} />
         </div>
+        <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-amber-500/20" data-testid="vip-show-on-main-row">
+          <div className="ps-8">
+            <div className="text-sm font-semibold text-amber-100">{t("vip_show_on_main", lang)}</div>
+            <div className={`text-[11px] ${showOnMain ? "text-slate-400" : "text-amber-300"}`} data-testid="vip-show-on-main-note">{t(showOnMain ? "vip_show_on_main_on" : "vip_show_on_main_off", lang)}</div>
+          </div>
+          <Switch data-testid="vip-show-on-main-switch" checked={showOnMain} onCheckedChange={setShowOnMain} />
+        </div>
         {!isVip && (
           <Button data-testid="vip-buy-publish-cta" onClick={goBuyVip} className="rose-btn text-white border-0 mt-3 w-full sm:w-auto"><Sparkles size={16} className="me-1" /> {t("vip_buy_publish", lang)}</Button>
         )}
@@ -270,13 +277,6 @@ export default function VipEditor() {
             {locating ? <Loader2 size={15} className="animate-spin" /> : <MapPin size={15} />}
             {locating ? t("detecting_location", lang) : t("detect_location", lang)}
           </button>
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-white/5 border border-white/10 px-3 py-2.5">
-            <div>
-              <div className="text-sm font-semibold text-amber-100">{t("vip_show_on_main", lang)}</div>
-              <div className="text-[11px] text-slate-400">{t("vip_show_on_main_note", lang)}</div>
-            </div>
-            <Switch data-testid="vip-show-on-main-switch" checked={showOnMain} onCheckedChange={setShowOnMain} />
-          </div>
         </div>
       )}
 
