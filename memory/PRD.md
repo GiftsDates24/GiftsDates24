@@ -1,7 +1,7 @@
 # PRD — GiftsDates (imported)
 
 ## Original problem statement
-"add exact website from Github saving all logins and texture" — https://github.com/GiftsDates21/GiftsDates21.git
+"add exact website from Github saving all logins and texture" — https://github.com/Giftsdates22/Giftsdates22.git
 
 ## User choices
 - Public repo; keep original login system; keep exact look, adapt to run here.
@@ -30,3 +30,6 @@ React (CRA/craco) + FastAPI (server.py, ~4.9k lines) + MongoDB. JWT email/passwo
 - P1: Email (EMERGENT_EMAIL_KEY) and Twilio SMS not configured.
 - P1: Original user accounts/data not in repo (they live in the old database).
 - P2: Stripe webhook secret, PUBLIC_APP_URL, WEBHOOK_CRON_SECRET.
+
+## Re-import (2026-10-14)
+- Re-imported from Giftsdates22 repo as-is; env re-provisioned (JWT, LLM key, Stripe test key, managed Resend email, ADMIN_EMAILS). Admin re-created: giftsdates@gmail.com. Smoke test iteration_6: 100% backend + frontend.
