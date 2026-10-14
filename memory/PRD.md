@@ -33,3 +33,4 @@ React (CRA/craco) + FastAPI (server.py, ~4.9k lines) + MongoDB. JWT email/passwo
 
 ## Re-import (2026-10-14)
 - Re-imported from Giftsdates22 repo as-is; env re-provisioned (JWT, LLM key, Stripe test key, managed Resend email, ADMIN_EMAILS). Admin re-created: giftsdates@gmail.com. Smoke test iteration_6: 100% backend + frontend.
+- Stripe (2026-10-14): new Emergent claimable sandbox acct_1UNPPIAKWHflcuy6 (CA, test mode) wired into backend/.env (STRIPE_SECRET_KEY/PUBLISHABLE/ACCOUNT_ID/WEBHOOK_SECRET/MODE). Checkout for coins, custom, Premium, Premium-Lite, VIP subscription verified (iteration_7). Tax: Stripe-managed (falls back to Stripe Tax calc). Sandbox expires 2026-12-13 unless claimed.
