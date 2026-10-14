@@ -58,8 +58,8 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
       ? navigator.geolocation.getCurrentPosition(x => res({ lat: x.coords.latitude, lng: x.coords.longitude }), () => res({}), { enableHighAccuracy: true, timeout: 8000 })
       : res({}));
     try {
-      await api.post(`/sos/${kind}/${id}`, p);
-      toast.success(t("sos_sent", lang), { duration: 10000 });
+      const r = await api.post(`/sos/${kind}/${id}`, p);
+      toast.success(t("sos_sent", lang) + (r.data.contacts_alerted ? " " + t("sos_contacts", lang).replace("{n}", r.data.contacts_alerted) : ""), { duration: 10000 });
       const v = { ...toRef.current, to_support: true }; setTo(v); toRef.current = v;
       if (p.lat != null) { pos.current = p; await api.post(base, { ...p, ...v, sharing: true }).catch(() => {}); }
       if (watch.current == null) start();

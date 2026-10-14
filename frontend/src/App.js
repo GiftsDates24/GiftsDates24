@@ -33,6 +33,7 @@ import AntiTrafficking from "@/pages/AntiTrafficking";
 import Complaints from "@/pages/Complaints";
 import Appeals from "@/pages/Appeals";
 import Fraud from "@/pages/Fraud";
+import SosPublic from "@/pages/SosPublic";
 import { PaymentSuccess, PaymentCancel } from "@/pages/PaymentResult";
 import SupportChat from "@/components/SupportChat";
 import RestoreAccountBanner from "@/components/RestoreAccountBanner";
@@ -51,6 +52,7 @@ const Shell = () => (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<Auth />} />
+      <Route path="/sos/:token" element={<SosPublic />} />
       <Route path="/browse" element={<Private><Browse /></Private>} />
       <Route path="/matches" element={<Private><Matches /></Private>} />
       <Route path="/chats" element={<Private><Chats /></Private>} />

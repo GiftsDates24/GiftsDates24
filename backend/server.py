@@ -3044,15 +3044,73 @@ async def sos_alert(kind: str, did: str, req: SosReq, user=Depends(get_current_u
     alert = {"id": str(uuid.uuid4()), "kind": kind, "date_id": did, "user_id": user["id"], "user_name": user.get("name"),
              "user_phone": user.get("phone"), "user_email": user.get("email"), "other_id": other, "other_name": (o or {}).get("name"),
              "lat": req.lat, "lng": req.lng, "message": (req.message or "").strip()[:500], "status": "open", "created_at": _iso()}
+    alert["public_token"] = secrets.token_urlsafe(24)
     await db.sos_alerts.insert_one(dict(alert))
+    contacts_alerted = await _alert_trusted_contacts(user, alert)
     where = f" Location: https://www.google.com/maps/search/?api=1&query={req.lat},{req.lng}" if req.lat is not None else " (no location available)"
     for aid in await _admin_ids():
         await notify(aid, "sos", "SOS — member needs help", f"{user.get('name')} pressed SOS during a date with {alert['other_name']}.{where}", {"sos_id": alert["id"]}, email=True, link=f"{PUBLIC_APP_URL}/admin", cta="Open SOS")
-    return {"ok": True, "id": alert["id"]}
+    return {"ok": True, "id": alert["id"], "contacts_alerted": contacts_alerted}
+
+class TrustedContact(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+class TrustedContactsReq(BaseModel):
+    contacts: list[TrustedContact] = []
+MAX_TRUSTED = 3
+
+@api.get("/me/trusted-contacts")
+async def get_trusted_contacts(user=Depends(get_current_user)):
+    return {"contacts": user.get("trusted_contacts") or [], "max": MAX_TRUSTED}
+
+@api.put("/me/trusted-contacts")
+async def put_trusted_contacts(req: TrustedContactsReq, user=Depends(get_current_user)):
+    if len(req.contacts) > MAX_TRUSTED: raise HTTPException(400, f"Up to {MAX_TRUSTED} trusted contacts")
+    out = []
+    for c in req.contacts:
+        name, phone = c.name.strip()[:60], re.sub(r"[^\d+]", "", c.phone or "")[:20]
+        if not name: raise HTTPException(400, "Contact name is required")
+        if not c.email and not phone: raise HTTPException(400, "Add an email or phone for each contact")
+        if phone and not re.fullmatch(r"\+?\d{7,15}", phone): raise HTTPException(400, "Invalid phone number")
+        out.append({"name": name, "email": (c.email or "").lower() or None, "phone": phone or None})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"trusted_contacts": out}})
+    return {"contacts": out}
+
+async def _alert_trusted_contacts(user, alert):
+    """Email (and SMS when configured) each trusted contact a link to the live SOS page. Max once per 5 min per user."""
+    contacts = user.get("trusted_contacts") or []
+    if not contacts: return 0
+    since = _iso(_now() - timedelta(minutes=5))
+    if await db.sos_alerts.count_documents({"user_id": user["id"], "contacts_notified": True, "created_at": {"$gte": since}}): return 0
+    link = f"{PUBLIC_APP_URL}/sos/{alert['public_token']}"
+    name = user.get("name") or "Your friend"
+    body = (f"{name} added you as a trusted contact on GiftsDates and just pressed the SOS button during a date. "
+            f"Open the link to see their location. Our support team has also been alerted. If you think they are in danger, call local emergency services.")
+    for c in contacts:
+        if c.get("email"):
+            _spawn(send_email(to=c["email"], subject=f"SOS from {name} on GiftsDates",
+                              html=_email_cta_html(f"{name} needs help", body, link, cta="See their location")))
+        if c.get("phone"):
+            _spawn(send_sms(to=c["phone"], body=f"GiftsDates SOS: {name} pressed SOS during a date. Location: {link}"))
+    await db.sos_alerts.update_one({"id": alert["id"]}, {"$set": {"contacts_notified": True}})
+    return len(contacts)
+
+@api.get("/sos/public/{token}")
+async def sos_public(token: str):
+    """Public page for trusted contacts: latest position of the member for 24h (or until resolved)."""
+    a = await db.sos_alerts.find_one({"public_token": token}, {"_id": 0})
+    if not a or (a.get("created_at") or "") < _iso(_now() - timedelta(hours=24)): raise HTTPException(404, "Not found")
+    lat, lng, at = a.get("lat"), a.get("lng"), a.get("created_at")
+    coll = db.dates if a["kind"] == "invite" else db.date_bookings
+    d = await coll.find_one({"id": a["date_id"]}, {"_id": 0, "live_location": 1})
+    live = ((d or {}).get("live_location") or {}).get(a["user_id"])
+    if live and live.get("to_support") and live.get("at", "") > (at or ""): lat, lng, at = live["lat"], live["lng"], live["at"]
+    return {"name": a.get("user_name"), "status": a.get("status"), "created_at": a.get("created_at"), "lat": lat, "lng": lng, "updated_at": at}
 
 @api.get("/admin/sos")
 async def admin_sos(admin=Depends(get_admin)):
-    return await db.sos_alerts.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return await db.sos_alerts.find({}, {"_id": 0, "public_token": 0}).sort("created_at", -1).to_list(100)
 
 @api.post("/admin/sos/{sid}/resolve")
 async def admin_sos_resolve(sid: str, admin=Depends(get_admin)):
