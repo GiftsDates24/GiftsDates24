@@ -75,6 +75,7 @@ def test_main_feed_vip_hidden_for_nonvip(tokens):
     lena = _find_lena(r.json())
     assert lena is not None, "Lena still visible on main feed, just without VIP badge"
     assert lena.get("is_vip") is False, "Non-VIP viewer must not see VIP badge"
+    assert lena.get("is_premium") is True, "Non-VIP viewer must see hidden VIP member as Premium"
 
 
 def test_profile_view_vip_true_for_vip_viewer(tokens):
@@ -86,7 +87,9 @@ def test_profile_view_vip_true_for_vip_viewer(tokens):
 def test_profile_view_vip_false_for_nonvip(tokens):
     r = requests.get(f"{BASE_URL}/api/profiles/{LENA_ID}", headers=_h(tokens["plain"]), timeout=15)
     assert r.status_code == 200
-    assert r.json().get("is_vip") is False
+    body = r.json()
+    assert body.get("is_vip") is False
+    assert body.get("is_premium") is True, "Non-VIP viewer must see hidden VIP member as Premium on profile view"
 
 
 def test_profile_view_vip_true_for_owner(tokens):
