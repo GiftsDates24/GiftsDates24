@@ -2787,6 +2787,8 @@ class LiveLocReq(BaseModel):
     lat: float
     lng: float
     sharing: bool = True
+    to_date: bool = True
+    to_support: bool = False
 
 async def _live_target(kind, did, uid):
     if kind == "invite":
@@ -2808,13 +2810,14 @@ async def _live_target(kind, did, uid):
 async def share_live_location(kind: str, did: str, req: LiveLocReq, user=Depends(get_current_user)):
     """Optional: share your current position with your date from 2h before the start until the date ends."""
     coll, d, _, start, ok = await _live_target(kind, did, user["id"])
-    if not req.sharing:
+    if not req.sharing or not (req.to_date or req.to_support):
         await coll.update_one({"id": did}, {"$unset": {f"live_location.{user['id']}": ""}})
         return {"ok": True, "sharing": False}
     if not ok or not start or not (start - timedelta(hours=2) <= _now() <= start + timedelta(minutes=DATE_SLOT_MINUTES)):
         raise HTTPException(400, "LIVE_LOCATION_CLOSED")
     if not (-90 <= req.lat <= 90 and -180 <= req.lng <= 180): raise HTTPException(400, "Invalid coordinates")
-    await coll.update_one({"id": did}, {"$set": {f"live_location.{user['id']}": {"lat": req.lat, "lng": req.lng, "at": _iso()}}})
+    await coll.update_one({"id": did}, {"$set": {f"live_location.{user['id']}": {"lat": req.lat, "lng": req.lng, "at": _iso(),
+        "to_date": req.to_date, "to_support": req.to_support}}})
     return {"ok": True, "sharing": True}
 
 @api.get("/live-location/{kind}/{did}")
@@ -2823,7 +2826,27 @@ async def get_live_location(kind: str, did: str, user=Depends(get_current_user))
     other = parties[1] if parties[0] == user["id"] else parties[0]
     live = d.get("live_location") or {}
     open_ = bool(ok and start and start - timedelta(hours=2) <= _now() <= start + timedelta(minutes=DATE_SLOT_MINUTES))
-    return {"open": open_, "opens_at": _iso(start - timedelta(hours=2)) if start else None, "me": live.get(user["id"]), "other": live.get(other) if open_ else None}
+    return {"open": open_, "opens_at": _iso(start - timedelta(hours=2)) if start else None, "me": live.get(user["id"]),
+            "other": live.get(other) if open_ and (live.get(other) or {}).get("to_date", True) else None}
+
+@api.get("/admin/live-locations")
+async def admin_live_locations(admin=Depends(get_admin)):
+    """Live locations users chose to share with support (updated in the last 3h)."""
+    since = _iso(_now() - timedelta(hours=3))
+    out, uids = [], set()
+    for kind, coll, a, b in (("invite", db.dates, "inviter_id", "recipient_id"), ("booking", db.date_bookings, "from_id", "to_id")):
+        async for d in coll.find({"live_location": {"$exists": True, "$ne": {}}}, {"_id": 0, "id": 1, a: 1, b: 1, "live_location": 1, "location": 1, "venue": 1, "address": 1, "city": 1}):
+            for uid, loc in (d.get("live_location") or {}).items():
+                if not loc.get("to_support") or (loc.get("at") or "") < since: continue
+                other = d[b] if uid == d[a] else d[a]
+                uids.update([uid, other])
+                v = d.get("location") or d
+                venue = ", ".join(x for x in (v.get("venue"), v.get("address"), v.get("city")) if x)
+                out.append({"kind": kind, "date_id": d["id"], "user_id": uid, "other_id": other, "lat": loc["lat"], "lng": loc["lng"],
+                            "at": loc["at"], "to_date": loc.get("to_date", True), "venue": venue})
+    names = {u["id"]: u.get("name") async for u in db.users.find({"id": {"$in": list(uids)}}, {"_id": 0, "id": 1, "name": 1})}
+    for o in out: o["user_name"], o["other_name"] = names.get(o["user_id"]), names.get(o["other_id"])
+    return sorted(out, key=lambda o: o["at"], reverse=True)
 
 @api.get("/profiles/{pid}/availability")
 async def profile_availability(pid: str, user=Depends(get_current_user)):

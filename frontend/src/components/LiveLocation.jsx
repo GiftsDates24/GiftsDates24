@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Navigation, MapPin, Radio } from "lucide-react";
+import { Navigation, MapPin, Radio, LifeBuoy, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
@@ -15,10 +15,14 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
   otherName = otherName || t("ll_your_date", lang);
   const [info, setInfo] = useState(null);
   const [sharing, setSharing] = useState(false);
-  const watch = useRef(null), last = useRef(0);
+  const [to, setTo] = useState({ to_date: true, to_support: false });
+  const watch = useRef(null), last = useRef(0), pos = useRef(null), toRef = useRef(to);
   const base = `/live-location/${kind}/${id}`;
 
-  const load = () => api.get(base).then(r => { setInfo(r.data); if (r.data.me && watch.current == null) setSharing(false); }).catch(() => {});
+  const load = () => api.get(base).then(r => {
+    setInfo(r.data);
+    if (r.data.me && watch.current == null) { const v = { to_date: r.data.me.to_date ?? true, to_support: !!r.data.me.to_support }; setTo(v); toRef.current = v; }
+  }).catch(() => {});
   useEffect(() => { load(); const iv = setInterval(load, 20000); return () => clearInterval(iv); }, [id]); // eslint-disable-line
   useEffect(() => () => { if (watch.current != null) navigator.geolocation.clearWatch(watch.current); }, []);
 
@@ -34,10 +38,24 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
     watch.current = navigator.geolocation.watchPosition(async (p) => {
       if (Date.now() - last.current < 15000) return;
       last.current = Date.now();
-      try { await api.post(base, { lat: p.coords.latitude, lng: p.coords.longitude, sharing: true }); load(); }
+      pos.current = { lat: p.coords.latitude, lng: p.coords.longitude };
+      try { await api.post(base, { ...pos.current, ...toRef.current, sharing: true }); load(); }
       catch (e) { toast.error(e.response?.data?.detail === "LIVE_LOCATION_CLOSED" ? t("ll_closed", lang) : t("failed", lang)); stop(); }
     }, () => { toast.error(t("ll_denied", lang)); stop(); }, { enableHighAccuracy: true, maximumAge: 10000 });
   };
+
+  const toggleTo = async (k) => {
+    const v = { ...toRef.current, [k]: !toRef.current[k] };
+    setTo(v); toRef.current = v;
+    if (!v.to_date && !v.to_support) { if (sharing) stop(); return; }
+    if (sharing && pos.current) await api.post(base, { ...pos.current, ...v, sharing: true }).then(load).catch(() => {});
+  };
+  const chip = (k, Icon, label) => (
+    <button type="button" onClick={() => toggleTo(k)} data-testid={`live-loc-share-${k === "to_date" ? "date" : "support"}-${id}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${to[k] ? "border-sky-400/50 bg-sky-500/15 text-sky-100" : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10"}`}>
+      <Icon size={11} />{label}
+    </button>
+  );
 
   if (!info) return null;
   if (!info.open) return info.opens_at && new Date(info.opens_at) > new Date()
@@ -54,8 +72,13 @@ export default function LiveLocation({ kind, id, otherName, venue }) {
         <label className="ms-auto flex items-center gap-2 text-xs text-slate-300">
           {sharing && <Radio size={12} className="text-emerald-300 animate-pulse" />}
           {t("ll_share", lang)}
-          <Switch checked={sharing} onCheckedChange={(v) => (v ? start() : stop())} data-testid={`live-loc-toggle-${id}`} />
+          <Switch checked={sharing} disabled={!to.to_date && !to.to_support} onCheckedChange={(v) => (v ? start() : stop())} data-testid={`live-loc-toggle-${id}`} />
         </label>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5" data-testid={`live-loc-share-with-${id}`}>
+        <span className="text-[11px] text-slate-400">{t("ll_share_with", lang)}</span>
+        {chip("to_date", Heart, otherName)}
+        {chip("to_support", LifeBuoy, t("ll_support", lang))}
       </div>
       {o ? (
         <div className="space-y-2" data-testid={`live-loc-other-${id}`}>

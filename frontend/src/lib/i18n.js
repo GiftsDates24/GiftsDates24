@@ -198,6 +198,8 @@ const T = {
   ll_optional: { en: "optional" },
   ll_your_date: { en: "Your date" },
   ll_share: { en: "Share mine" },
+  ll_share_with: { en: "Share with:" },
+  ll_support: { en: "Support team" },
   ll_opens: { en: "Live location sharing opens {t} (2h before the date)." },
   ll_other_here: { en: "{name} is here" },
   ll_updated: { en: "updated {n} min ago" },
